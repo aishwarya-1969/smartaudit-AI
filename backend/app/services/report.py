@@ -34,7 +34,8 @@ def build_pdf(R, user):
           _table(["Employee", "Transactions", "Flagged", "Risk"], [[e["name"], e["n"], e["fl"], e["sc"]] for e in R["emp"][:8]]),
           Spacer(1, 10), Paragraph("Compliance", ss["Heading2"]),
           _table(["Rule", "Violations"], [[clean(c["n"]), c["f"] if c["ok"] is not None else "n/a"] for c in R["comp"]])]
-    h = R.get("hist") or {}
+    h = R.get("history")
+    h = h if isinstance(h, dict) else {}
     s += [Spacer(1, 10), Paragraph("Historical vs current", ss["Heading2"])]
     if h.get("available"):
         s += [_table(["", "Historical", "Current"], [["Transactions", h["hist_n"], h["cur_n"]],

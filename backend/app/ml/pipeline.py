@@ -77,7 +77,7 @@ def run(raw, history=None):
              "r": float(risk[i]), "ty": df.ty.iloc[i]} for i in top]
     hist = compare(df, history)
     return {"n": len(df), "L": log, "comp": comp, "cs": cs, "tot": total, "exp": exposure, "hc": hc, "hs": hs,
-            "recs": sc.recommendations(len(flagged), exposure, top5, comp, vend, emp) + historical_recs(hist), "hist": hist,
+            "recs": sc.recommendations(len(flagged), exposure, top5, comp, vend, emp) + historical_recs(hist), "history": hist,
             "vend": _records(vend), "emp": _records(emp), "A": attention.tolist(), "win": T, "model": "VAE + GRU + Temporal Attention",
             "hist": np.histogram(risk, bins=10, range=(0, 1))[0].tolist(),
             "rows": rows, "X": X[top].tolist(), "fl": list(range(len(rows))), "shap": shap_rows,

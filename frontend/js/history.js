@@ -17,7 +17,7 @@ async function histUpload(file) {
 }
 function histPage() {
   if (S.hs === undefined) { S.hs = { rows: 0 }; histLoad(); }
-  const hs = S.hs, R = S.res, h = R && R.hist;
+  const hs = S.hs, R = S.res, h = R && R.history;
   let o = hd('Historical vs Current', 'Compare new transactions with approved historical records. Nothing is estimated when history is missing.');
   o += `<div class="card" style="margin-bottom:14px"><h2>Historical data store</h2><p>${hs.rows ? hs.rows.toLocaleString('en-IN') + ' records · ' + hs.vendors + ' vendors · ' + (hs.from || 'n/a') + ' to ' + (hs.to || 'n/a') : 'No historical data uploaded yet.'}</p>`
     + `<input id="hf" type="file" accept=".csv,text/csv" style="display:none" onchange="histUpload(this.files[0])"><button class="btn s" onclick="$('#hf').click()">Upload historical CSV</button>`
