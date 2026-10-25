@@ -129,3 +129,13 @@ api.analyze = async function (text) {
   catch (e) { throw new Error(e.name == 'AbortError' ? 'The server took longer than 5 minutes. Check the Render logs.' : e.message); }
   finally { clearTimeout(t); }
 };
+
+api.pdf = async function () {
+  if (!S.res) { alert('Run an analysis first, then download the report.'); return; }
+  try {
+    const r = await api.req('/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S.res) });
+    const url = URL.createObjectURL(await r.blob()), a = document.createElement('a');
+    a.href = url; a.download = 'smartaudit-report-' + new Date().toISOString().slice(0, 10) + '.pdf';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) { alert('PDF failed: ' + e.message); }
+};

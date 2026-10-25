@@ -1,5 +1,6 @@
 """Server-side PDF audit report (ReportLab)."""
 from datetime import date
+from xml.sax.saxutils import escape
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -7,6 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 def _table(head, rows):
+    rows = rows or [["-"] * len(head)]
     t = Table([head] + rows, repeatRows=1)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7c5cff")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                            ("GRID", (0, 0), (-1, -1), .3, colors.grey), ("FONTSIZE", (0, 0), (-1, -1), 8)]))
@@ -18,11 +20,11 @@ def build_pdf(R, user):
     clean = lambda s: s.replace("₹", "Rs ").replace("’", "'")
     grade = "ABCDE"[0 if R["hs"] >= 85 else 1 if R["hs"] >= 70 else 2 if R["hs"] >= 55 else 3 if R["hs"] >= 40 else 4]
     s = [Paragraph("SmartAudit AI - Audit Report", ss["Title"]),
-         Paragraph(f"Prepared for {user} on {date.today():%d %B %Y}", ss["Normal"]), Spacer(1, 12),
+         Paragraph(f"Prepared for {escape(user)} on {date.today():%d %B %Y}", ss["Normal"]), Spacer(1, 12),
          _table(["Financial health", "Transactions", "Flagged", "Exposure", "Compliance"],
                 [[f"{R['hs']} (grade {grade})", R["n"], R["nfl"], inr(R["exp"]), f"{R['cs']*100:.0f}%"]]), Spacer(1, 14),
          Paragraph("Audit recommendations", ss["Heading2"])]
-    s += [Paragraph(clean(f"<b>{lvl}</b>: {txt}"), ss["Normal"]) for lvl, txt in R["recs"]]
+    s += [Paragraph(f"<b>{escape(lvl)}</b>: {escape(clean(txt))}", ss["Normal"]) for lvl, txt in R["recs"]]
     s += [Spacer(1, 10), Paragraph("Top flagged transactions", ss["Heading2"]),
           _table(["ID", "Date", "Vendor", "Employee", "Amount", "Risk", "Pattern"],
                  [[r["id"], r["d"] or "-", r["v"], r["e"], inr(r["a"]), round(r["r"] * 100), r["ty"]] for r in R["rows"][:15]]),

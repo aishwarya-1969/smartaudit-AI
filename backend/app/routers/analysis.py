@@ -1,6 +1,6 @@
 import io
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from ..config import MAX_UPLOAD_BYTES
 from ..ml.historical import load as load_history
@@ -23,6 +23,16 @@ def analyze(file: UploadFile = File(...), user=Depends(current_user)):
         raise HTTPException(400, str(e))
     LAST[user["name"]] = result
     return result
+
+@router.post("/report")
+def report_from_result(result: dict = Body(...), user=Depends(current_user)):
+    """Builds a fresh PDF from the analysis the browser already has (works after server restarts)."""
+    try:
+        pdf = build_pdf(result, user["name"])
+    except Exception as e:
+        raise HTTPException(500, f"Could not build the PDF: {e}")
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="smartaudit-report.pdf"'})
 
 @router.get("/report")
 def report(user=Depends(current_user)):
