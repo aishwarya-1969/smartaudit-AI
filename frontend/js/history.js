@@ -31,3 +31,7 @@ function histPage() {
   o += shift('Vendor spending changes', h.vendor_shift) + shift('Employee-associated transaction changes', h.employee_shift);
   return o + `<p class="m">Limitations: ${h.new_vendors} current payments are to vendors with no history, and ${h.thin_vendors} are to vendors with fewer than 5 past payments, so their amounts were not compared. These flags are review prompts, not proof of fraud.</p>`;
 }
+
+/* SHAP is computed only for the top-risk rows, so hide "Explain" on the others. */
+const _flRows = flRows;
+flRows = function (R, n) { return _flRows(R, n).map((row, i) => i < R.shap.length ? row : row.replace(/<button[^>]*>Explain<\/button>/, '')); };

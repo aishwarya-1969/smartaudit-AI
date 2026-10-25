@@ -7,6 +7,6 @@ def explain(make_fn, X, idx, baseline):
     for i in idx:
         f = make_fn(i)
         ex = shap.KernelExplainer(f, baseline.reshape(1, -1))
-        sv = np.asarray(ex.shap_values(X[i:i + 1], nsamples=512, silent=True)).reshape(-1)
+        sv = np.asarray(ex.shap_values(X[i:i + 1], nsamples=256, silent=True)).reshape(-1)
         out.append({"phi": sv.tolist(), "base": float(np.ravel(ex.expected_value)[0]), "out": float(f(X[i:i + 1])[0])})
     return out

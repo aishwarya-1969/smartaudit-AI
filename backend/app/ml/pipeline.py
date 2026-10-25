@@ -12,6 +12,9 @@ from .preprocess import clean
 def _records(df):
     return json.loads(df.to_json(orient="records"))
 
+SHAP_ROWS = 15  # SHAP is computed for the 15 highest-risk transactions
+_log = lambda m: print(f"[audit] {m}", flush=True)
+
 def _windows(df):
     """Row ids of the last T transactions in time order for every transaction (padded with the first row)."""
     n = len(df)
@@ -31,8 +34,10 @@ def run(raw, history=None):
     target = np.clip(rule / Q, 0, 1)                                 # weak labels from the expert rule score
     if df.label.sum() > 0:                                           # use real labels when the CSV has them
         target = np.where(df.label.to_numpy() > 0, 1.0, target)
+    _log(f"{len(df)} rows cleaned, features built; training VAE+GRU")
     win = _windows(df)
     model = train(X, win, target)
+    _log("training done; scoring")
     head, err, att = predict(model, X, win)
     E = float(np.quantile(err, .99)) or 1.0
     E = E if E > 0 else 1.0
@@ -58,7 +63,9 @@ def run(raw, history=None):
     flagged = np.where(risk >= thr)[0]
     top = flagged[np.argsort(-risk[flagged])][:1000]
     df["ty"] = np.array(FEATURES)[(X * W).argmax(1)]
-    shap_rows = explain(make_fn, X, top[:40], X.mean(0))
+    _log("scoring done; running SHAP")
+    shap_rows = explain(make_fn, X, top[:SHAP_ROWS], X.mean(0))
+    _log("SHAP done; building scores")
 
     vend, emp = sc.vendors(df, thr), sc.employees(df, thr)
     comp, cs = sc.compliance(df, X, has_approver)

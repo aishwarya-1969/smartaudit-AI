@@ -1,9 +1,11 @@
 """Stage 4: sliding windows -> VAE encoder-decoder -> GRU temporal learning -> temporal attention + position awareness -> risk head."""
 import math
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 
+torch.set_num_threads(int(os.getenv("TORCH_THREADS", "1")))  # avoids CPU over-subscription on small servers
 T = 8  # sliding-window length (current transaction + the 7 before it, in time order)
 
 def _positional_encoding(steps, dim):
@@ -32,7 +34,7 @@ class VAEGRU(nn.Module):
         ctx = ((out + self.pe) * w.unsqueeze(-1)).sum(1)
         return self.head(ctx).squeeze(-1), self.dec(z), mu, lv, w
 
-def train(X, win, target, epochs=25, seed=7, max_rows=20000, beta=.05):
+def train(X, win, target, epochs=15, seed=7, max_rows=5000, beta=.05):
     """Loss = reconstruction + beta*KL (VAE) + risk-head error against the weak/real labels."""
     torch.manual_seed(seed)
     sel = torch.tensor(np.random.default_rng(seed).permutation(len(X))[:max_rows])

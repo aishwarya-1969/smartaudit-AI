@@ -121,3 +121,11 @@ async function delu(n) {
     }
     draw();
 })();
+
+api.analyze = async function (text) {
+  const fd = new FormData(); fd.append('file', new Blob([text], { type: 'text/csv' }), 'data.csv');
+  const c = new AbortController(), t = setTimeout(() => c.abort(), 300000);
+  try { return await (await api.req('/analyze', { method: 'POST', body: fd, signal: c.signal })).json(); }
+  catch (e) { throw new Error(e.name == 'AbortError' ? 'The server took longer than 5 minutes. Check the Render logs.' : e.message); }
+  finally { clearTimeout(t); }
+};
