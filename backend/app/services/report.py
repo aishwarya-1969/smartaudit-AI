@@ -34,6 +34,16 @@ def build_pdf(R, user):
           _table(["Employee", "Transactions", "Flagged", "Risk"], [[e["name"], e["n"], e["fl"], e["sc"]] for e in R["emp"][:8]]),
           Spacer(1, 10), Paragraph("Compliance", ss["Heading2"]),
           _table(["Rule", "Violations"], [[clean(c["n"]), c["f"] if c["ok"] is not None else "n/a"] for c in R["comp"]])]
+    ev = R.get("evaluation") or {}
+    s += [Spacer(1, 10), Paragraph("Model evaluation", ss["Heading2"])]
+    if ev.get("available"):
+        s += [Paragraph(f"Split: {escape(ev['split'])}. Train {ev['train_n']} rows ({ev['train_period']}); test {ev['test_n']} rows ({ev['test_period']}); "
+                        f"test fraud cases {ev['test_fraud']}, legitimate {ev['test_legit']}.", ss["Normal"]),
+              _table(["Model", "Accuracy", "Precision", "Recall", "F1", "ROC-AUC", "PR-AUC"],
+                     [[m["name"]] + ["n/a" if m[k] is None else f"{m[k]:.3f}" for k in ("accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc")]
+                      for m in ev["models"]])]
+    else:
+        s.append(Paragraph(escape(ev.get("reason", "Model evaluation unavailable.")) + " No accuracy is reported.", ss["Normal"]))
     h = R.get("history")
     h = h if isinstance(h, dict) else {}
     s += [Spacer(1, 10), Paragraph("Historical vs current", ss["Heading2"])]

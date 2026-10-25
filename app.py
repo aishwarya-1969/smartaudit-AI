@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "backend"
 PORT = int(os.getenv("PORT", "8000"))
-MODULES = ["fastapi", "uvicorn", "multipart", "pandas", "numpy", "torch", "shap", "sklearn", "reportlab", "jwt"]
+MODULES = ["fastapi", "uvicorn", "multipart", "pandas", "numpy", "xgboost", "shap", "sklearn", "reportlab", "jwt"]
 
 
 def install_missing():
@@ -22,8 +22,6 @@ def install_missing():
         return
     print("Installing required packages (first run only, takes several minutes)...")
     pip = [sys.executable, "-m", "pip", "install"]
-    if not importlib.util.find_spec("torch"):
-        subprocess.check_call(pip + ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"])
     subprocess.check_call(pip + ["-r", str(BACKEND / "requirements.txt")])
 
 

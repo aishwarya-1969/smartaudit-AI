@@ -1,8 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
- && pip install --no-cache-dir -r backend/requirements.txt && mkdir -p /data
+RUN pip install --no-cache-dir -r backend/requirements.txt && mkdir -p /data
 COPY backend backend
 COPY frontend frontend
 ENV DB_PATH=/data/smartaudit.db OMP_NUM_THREADS=1 MKL_NUM_THREADS=1

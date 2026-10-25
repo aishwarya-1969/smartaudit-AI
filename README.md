@@ -16,12 +16,12 @@ AI framework for financial anomaly detection, explainable risk assessment and au
 
 ```
 smartaudit-ai/
-├── backend/                FastAPI + PyTorch + SHAP
+├── backend/                FastAPI + XGBoost + SHAP
 │   ├── app/
 │   │   ├── main.py                       app entry, also serves the frontend
 │   │   ├── config.py db.py security.py   settings, SQLite, JWT + password hashing
 │   │   ├── routers/                      auth.py (login, users), analysis.py (upload, PDF)
-│   │   ├── ml/                           preprocess > features > model (VAE+GRU+Temporal Attention) > explain (SHAP) > scoring > pipeline
+│   │   ├── ml/                           preprocess > features > model (XGBoost) > explain (SHAP TreeExplainer) > scoring > pipeline
 │   │   └── services/report.py            PDF report (ReportLab)
 │   └── requirements.txt
 ├── frontend/               index.html, css/style.css, js/app.js (UI), js/api.js (API client)
@@ -35,7 +35,6 @@ smartaudit-ai/
 cd backend
 python -m venv .venv
 .venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
@@ -48,12 +47,15 @@ The Dockerfile serves backend and frontend together, so you deploy one service.
 - Render / Railway / Fly.io: create a Web Service from this repo, choose Docker, set env `SECRET_KEY` to a long random string.
 - Any VM: `docker build -t smartaudit . && docker run -p 80:8000 -e SECRET_KEY=... -v smartdata:/data smartaudit`
 
-Notes: SQLite lives in /data (attach a persistent disk, or switch to Postgres for production). Use at least 1 GB RAM (PyTorch).
+Notes: SQLite lives in /data (attach a persistent disk, or switch to Postgres for production). 512 MB RAM is enough (no PyTorch).
 
-CSV: required `amount`; optional `txn_id, date, vendor, employee, category, approved_by, is_fraud` (labels, if present, are used for training).
+CSV: required `amount`; optional `txn_id, date, vendor, employee, category, approved_by, is_fraud` (labels, if present, are used only by the supervised models on the Model Evaluation page).
 
 ## Historical data (new)
 Open "Historical vs Current", upload approved past transactions (Admin/Auditor), then analyse a new CSV. Overlapping rows are skipped, history is never invented, and comparisons need 5+ past payments per vendor and 3+ months of history. Tests: `cd backend && python tests/test_historical.py`.
 
 ## Model (follows the base-paper methodology)
-Audit data > preprocessing + sliding window (last 8 transactions in time order) > VAE encoder-decoder (reconstruction error = anomaly signal) > GRU temporal learning > temporal attention with position encoding > risk score. SHAP explains the current transaction while the 7 earlier ones stay fixed as context. Without fraud labels the risk head learns from an expert rule score (weak labels), so results are screening scores, not measured fraud accuracy.
+Audit data > preprocessing > 9 audit risk features > XGBoost > risk score > SHAP (TreeExplainer) > vendor/employee/compliance/health scores > recommendations. With an `is_fraud` column XGBoost is a supervised classifier and each row is scored out-of-fold (never by a model that saw its own label). Without labels XGBoost learns from an expert rule score (weak labels), so results are screening scores, not measured fraud accuracy. SHAP shows association, not causation.
+
+## Supervised models and evaluation (Module 2)
+When the CSV has an `is_fraud` column, Logistic Regression, Random Forest and XGBoost are trained on the earlier 70% of transactions and tested on the later 30% (stratified split if dates are missing). The Model Evaluation page shows real accuracy, precision, recall, F1, ROC-AUC, PR-AUC and the confusion matrix, next to the expert rule-score baseline. Without labels nothing is invented. Try `sample_data/labeled_demo.csv` (synthetic).

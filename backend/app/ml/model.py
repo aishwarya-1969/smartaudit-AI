@@ -1,68 +1,31 @@
-"""Stage 4: sliding windows -> VAE encoder-decoder -> GRU temporal learning -> temporal attention + position awareness -> risk head."""
-import math
-import os
+"""Stage 4: XGBoost risk model (gradient-boosted trees).
+- Labels available (is_fraud): XGBClassifier. Risk = out-of-fold fraud probability, so no row is scored by a model that saw its own label.
+- No labels: XGBRegressor learns the expert rule score (weak labels). This is screening, not measured fraud accuracy."""
 import numpy as np
-import torch
-import torch.nn as nn
+from sklearn.model_selection import StratifiedKFold
+from xgboost import XGBClassifier, XGBRegressor
 
-torch.set_num_threads(int(os.getenv("TORCH_THREADS", "1")))  # avoids CPU over-subscription on small servers
-T = 8  # sliding-window length (current transaction + the 7 before it, in time order)
+PARAMS = dict(n_estimators=200, max_depth=4, learning_rate=.08, subsample=.9, colsample_bytree=.9, n_jobs=1, random_state=7)
 
-def _positional_encoding(steps, dim):
-    pe, pos = torch.zeros(steps, dim), torch.arange(steps).unsqueeze(1)
-    div = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000.0) / dim))
-    pe[:, 0::2], pe[:, 1::2] = torch.sin(pos * div), torch.cos(pos * div)
-    return pe
+def _clf(y):
+    return XGBClassifier(**PARAMS, eval_metric="logloss", scale_pos_weight=float((y == 0).sum() / max(y.sum(), 1)))
 
-class VAEGRU(nn.Module):
-    def __init__(self, d=9, latent=6, hidden=16):
-        super().__init__()
-        self.enc = nn.Sequential(nn.Linear(d, 16), nn.ReLU())                      # VAE encoder
-        self.mu, self.lv = nn.Linear(16, latent), nn.Linear(16, latent)
-        self.dec = nn.Sequential(nn.Linear(latent, 16), nn.ReLU(), nn.Linear(16, d), nn.Sigmoid())  # VAE decoder
-        self.gru = nn.GRU(latent, hidden, batch_first=True)                        # GRU temporal learning
-        self.att = nn.Linear(hidden, 1)                                            # temporal attention
-        self.head = nn.Sequential(nn.Linear(hidden, 8), nn.ReLU(), nn.Linear(8, 1), nn.Sigmoid())
-        self.register_buffer("pe", _positional_encoding(T, hidden))                # position awareness
+def train(X, target, y):
+    """Returns (final model, risk 0-1 per row, mode). y = 0/1 fraud labels (all zero when none were supplied)."""
+    y = np.asarray(y).astype(int)
+    if y.sum() >= 10 and (1 - y).sum() >= 10:
+        k = int(min(5, y.sum(), (1 - y).sum()))
+        oof = np.zeros(len(y))
+        for tr, te in StratifiedKFold(k, shuffle=True, random_state=7).split(X, y):
+            oof[te] = _clf(y[tr]).fit(X[tr], y[tr]).predict_proba(X[te])[:, 1]
+        return _clf(y).fit(X, y), oof, "supervised"
+    m = XGBRegressor(**PARAMS).fit(X, target)
+    return m, np.clip(m.predict(X), 0, 1), "weak-label"
 
-    def forward(self, x):                                                          # x: (batch, T, features)
-        e = self.enc(x)
-        mu, lv = self.mu(e), self.lv(e).clamp(-6, 4)
-        z = mu + torch.randn_like(mu) * torch.exp(.5 * lv) if self.training else mu
-        out, _ = self.gru(z)
-        w = torch.softmax(self.att(out + self.pe).squeeze(-1), dim=1)
-        ctx = ((out + self.pe) * w.unsqueeze(-1)).sum(1)
-        return self.head(ctx).squeeze(-1), self.dec(z), mu, lv, w
+def predict(model, mode, X):
+    X = np.atleast_2d(X)
+    return model.predict_proba(X)[:, 1] if mode == "supervised" else np.clip(model.predict(X), 0, 1)
 
-def train(X, win, target, epochs=15, seed=7, max_rows=5000, beta=.05):
-    """Loss = reconstruction + beta*KL (VAE) + risk-head error against the weak/real labels."""
-    torch.manual_seed(seed)
-    sel = torch.tensor(np.random.default_rng(seed).permutation(len(X))[:max_rows])
-    Xt, Wt, Tt = torch.tensor(X, dtype=torch.float32), torch.tensor(win), torch.tensor(target, dtype=torch.float32)
-    model = VAEGRU()
-    opt = torch.optim.Adam(model.parameters(), lr=3e-3)
-    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=.5, patience=2)
-    for _ in range(epochs):
-        model.train()
-        total = 0.0
-        for b in sel[torch.randperm(len(sel))].split(256):
-            xb = Xt[Wt[b]]
-            head, rec, mu, lv, _ = model(xb)
-            kl = -.5 * torch.mean(1 + lv - mu ** 2 - lv.exp())
-            loss = nn.functional.mse_loss(rec, xb) + beta * kl + nn.functional.mse_loss(head, Tt[b])
-            opt.zero_grad(); loss.backward(); opt.step()
-            total += loss.item() * len(b)
-        sched.step(total / len(sel))
-    return model.eval()
-
-def score_windows(model, xb):
-    """xb: (m, T, features) numpy -> (risk head output, reconstruction error of the last transaction)."""
-    with torch.no_grad():
-        x = torch.tensor(xb, dtype=torch.float32)
-        head, rec, _, _, w = model(x)
-        err = ((rec[:, -1] - x[:, -1]) ** 2).mean(1)
-    return head.numpy().astype(float), err.numpy().astype(float), w.numpy()
-
-def predict(model, X, win, batch=4096):
-    parts = [score_windows(model, X[win[i:i + batch]]) for i in range(0, len(win), batch)]
-    return tuple(np.concatenate(p) for p in zip(*parts))
+def importance(model):
+    g = np.asarray(model.feature_importances_, dtype=float)
+    return (g / g.sum() if g.sum() > 0 else g).tolist()

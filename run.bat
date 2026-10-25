@@ -13,8 +13,6 @@ if not exist .venv (
 call .venv\Scripts\activate
 if not exist .venv\installed.flag (
   echo Installing packages - the first time takes several minutes...
-  pip install torch --index-url https://download.pytorch.org/whl/cpu
-  if errorlevel 1 ( echo PyTorch install failed & pause & exit /b 1 )
   pip install -r requirements.txt
   if errorlevel 1 ( echo Package install failed & pause & exit /b 1 )
   echo ok> .venv\installed.flag

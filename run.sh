@@ -6,7 +6,6 @@ command -v python3 >/dev/null || { echo "Install Python 3.10-3.12 first"; exit 1
 source .venv/bin/activate
 if [ ! -f .venv/installed.flag ]; then
   echo "Installing packages - the first time takes several minutes..."
-  pip install torch --index-url https://download.pytorch.org/whl/cpu
   pip install -r requirements.txt
   touch .venv/installed.flag
 fi
